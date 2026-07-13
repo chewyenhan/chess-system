@@ -58,7 +58,7 @@
           <input type="text" id="tName" placeholder="例：初一国际象棋锦标赛" required>
           <label for="tRounds" style="margin-top:1rem;">总轮次</label>
           <select id="tRounds">
-            <option value="3">3 轮</option>
+            <option value="3">3 轮（适合4-8人）</option>
             <option value="5" selected>5 轮（推荐，适合8-16人）</option>
             <option value="7">7 轮（适合16-32人）</option>
             <option value="9">9 轮（适合32人以上）</option>
@@ -69,9 +69,10 @@
           <label style="margin-top:1rem;">🏅 破同分规则（按优先级排序）</label>
           <fieldset style="margin-bottom:0;">
             <label><input type="checkbox" id="tbBuchholz" checked> ① 对手分 (Buchholz) — 所有对手的积分之和</label>
-            <label><input type="checkbox" id="tbDirect"> ② 直胜 (Direct Encounter) — 相互对局结果</label>
-            <label><input type="checkbox" id="tbSonneborn"> ③ 索尼伯恩 (Sonneborn-Berger) — 击败对手的积分加权</label>
-            <label><input type="checkbox" id="tbProgressive"> ④ 累进分 (Progressive) — 每轮结束时的积分累加</label>
+            <label><input type="checkbox" id="tbMedian" checked> ② 中间对手分 (Median Buchholz) — 去掉最高最低对手分</label>
+            <label><input type="checkbox" id="tbDirect"> ③ 直胜 (Direct Encounter) — 相互对局结果</label>
+            <label><input type="checkbox" id="tbSonneborn"> ④ 索尼伯恩 (Sonneborn-Berger) — 击败对手的积分加权</label>
+            <label><input type="checkbox" id="tbProgressive"> ⑤ 累进分 (Progressive) — 每轮结束时的积分累加</label>
           </fieldset>
           <div id="createError" style="color:#dc2626; font-size:0.9rem; margin-top:0.5rem; display:none;"></div>
           <button type="submit" id="createBtn" style="width:100%; margin-top:1rem;">创建比赛</button>
@@ -162,6 +163,7 @@
       // 收集破同分规则
       const tieBreakers = [];
       if (document.getElementById('tbBuchholz').checked) tieBreakers.push('buchholz');
+      if (document.getElementById('tbMedian').checked) tieBreakers.push('median');
       if (document.getElementById('tbDirect').checked) tieBreakers.push('direct');
       if (document.getElementById('tbSonneborn').checked) tieBreakers.push('sonneborn');
       if (document.getElementById('tbProgressive').checked) tieBreakers.push('progressive');

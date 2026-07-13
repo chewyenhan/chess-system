@@ -18,6 +18,7 @@ export function calculateStandings(players, history, tieBreakers) {
 
   // 各种破同分指标
   const buchholz = calcBuchholz(players, history, scores);
+  const medianBuchholz = calcMedianBuchholz(players, history, scores);
   const direct = calcDirectEncounter(players, history, scores);
   const sonneborn = calcSonneborn(players, history, scores);
   const progressive = calcProgressive(players, history);
@@ -29,6 +30,7 @@ export function calculateStandings(players, history, tieBreakers) {
     grade: p.grade || '',
     score: scores[p.id] || 0,
     buchholz: buchholz[p.id] || 0,
+    median: medianBuchholz[p.id] || 0,
     direct: direct[p.id]?.score || 0,
     sonneborn: sonneborn[p.id] || 0,
     progressive: progressive[p.id] || 0,
@@ -64,6 +66,8 @@ function compareByRule(a, b, rule) {
   switch (rule) {
     case 'buchholz':
       return b.buchholz - a.buchholz;
+    case 'median':
+      return b.median - a.median;
     case 'direct':
       return b.direct - a.direct;
     case 'sonneborn':
@@ -114,6 +118,40 @@ function calcBuchholz(players, history, scores) {
   }
 
   return buchholz;
+}
+
+// ── Median Buchholz（中间对手分 = 对手分去掉最高和最低分） ──
+function calcMedianBuchholz(players, history, scores) {
+  const median = {};
+  for (const p of players) median[p.id] = 0;
+
+  // 先收集每个选手的所有对手分
+  const opponentScores = {};
+  for (const p of players) opponentScores[p.id] = [];
+
+  for (const m of history) {
+    if (m.result === 'PENDING') continue;
+    const wid = m.white_player_id;
+    const bid = m.black_player_id;
+    if (wid && bid) {
+      if (opponentScores[wid]) opponentScores[wid].push(scores[bid] || 0);
+      if (opponentScores[bid]) opponentScores[bid].push(scores[wid] || 0);
+    }
+  }
+
+  // 去掉最高和最低分后求和（如果对手数 ≤ 2 则保留全部）
+  for (const p of players) {
+    const arr = opponentScores[p.id] || [];
+    if (arr.length <= 2) {
+      median[p.id] = arr.reduce((a, b) => a + b, 0);
+    } else {
+      const sorted = [...arr].sort((a, b) => a - b);
+      // 去掉最低和最高各1个
+      median[p.id] = sorted.slice(1, -1).reduce((a, b) => a + b, 0);
+    }
+  }
+
+  return median;
 }
 
 // ── Direct Encounter（直胜分） ──

@@ -217,7 +217,7 @@ export default {
 async function handleCreateTournament(request, env, cors) {
   try {
     const body = await request.json();
-    const { name, total_rounds = 5, tie_breakers = '["buchholz","direct","sonneborn"]' } = body;
+    const { name, total_rounds = 5, tie_breakers = '["buchholz","median","direct","sonneborn"]' } = body;
 
     if (!name || !name.trim()) {
       return json({ error: '请输入比赛名称' }, 400, cors);

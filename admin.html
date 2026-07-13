@@ -65,21 +65,24 @@
 
     <div id="errorMsg" style="color:#dc2626; margin-bottom:1rem; display:none;"></div>
 
-    <!-- 阶段 1：导入选手（SETUP） -->
+    <!-- 阶段 1：导入选手（SETUP，仅在尚无选手时显示） -->
     <article id="phaseSetup" style="display:none;">
       <header><span class="section-title">📋 导入选手名单</span></header>
-      <p style="font-size:0.9rem; color:var(--pico-muted-color);">每行一位选手：<strong>姓名</strong> 或 <strong>姓名,年级</strong></p>
-      <textarea id="playerInput" rows="8" placeholder="例：&#10;张三,初一&#10;李四,初二&#10;王五&#10;赵六,初三"></textarea>
+      <p style="font-size:0.9rem; color:var(--pico-muted-color);">每行一位选手：<strong>姓名</strong> 或 <strong>姓名,年级</strong>（通常在首页已导入，此处可追加）</p>
+      <textarea id="playerInput" rows="6" placeholder="例：&#10;张三,初一&#10;李四,初二&#10;王五&#10;赵六,初三"></textarea>
       <div style="margin-top:1rem;">
-        <button id="importBtn" onclick="handleImport()">导入选手</button>
+        <button id="importBtn" onclick="handleImport()">导入/覆盖选手</button>
         <button class="secondary" onclick="loadDemoPlayers()" style="margin-left:0.5rem;">📥 载入演示数据（11人）</button>
+        <button class="secondary" onclick="toggleImport()" style="margin-left:0.5rem;">✕ 收起</button>
       </div>
-      <div style="margin-top:1rem;" id="playerList"></div>
     </article>
 
     <!-- 阶段 2：已导入选手 + 生成配对按钮（SETUP / PAIRING_PUBLISHED） -->
     <article id="phasePlayers" style="display:none;">
-      <header><span class="section-title">👥 参赛选手 (<span id="playerCount">0</span>人)</span></header>
+      <header style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.5rem;">
+        <span class="section-title" style="margin:0;">👥 参赛选手 (<span id="playerCount">0</span>人)</span>
+        <button class="outline secondary" style="font-size:0.8rem; padding:0.2rem 0.6rem;" onclick="toggleImport()" id="toggleImportBtn">＋ 追加选手</button>
+      </header>
       <figure style="overflow-x:auto;">
         <table class="player-table striped">
           <thead><tr><th>#</th><th>姓名</th><th>年级</th><th>操作</th></tr></thead>
@@ -142,6 +145,12 @@
 
     // ── 根据比赛状态渲染 UI ──
     function renderUI() {
+      // 先重置所有按钮状态（防止上次操作遗留的 disabled + 文字）
+      const genBtn = document.getElementById('genPairBtn');
+      const advBtn = document.getElementById('advanceBtn');
+      if (genBtn) { genBtn.disabled = false; genBtn.textContent = '🎲 生成当前轮配对'; }
+      if (advBtn) { advBtn.disabled = false; advBtn.textContent = '✅ 发布成绩 & 进入下一轮'; }
+
       // 状态流高亮
       const statusOrder = ['SETUP', 'PAIRING_PUBLISHED', 'ROUND_ENDED', 'FINISHED'];
       const currentIdx = statusOrder.indexOf(tournament.status);
@@ -153,11 +162,12 @@
 
       // 显示/隐藏各阶段
       if (tournament.status === 'SETUP') {
-        document.getElementById('phaseSetup').style.display = 'block';
+        document.getElementById('phaseSetup').style.display = tournament.player_count === 0 ? 'block' : 'none';
         document.getElementById('phasePlayers').style.display = tournament.player_count > 0 ? 'block' : 'none';
         document.getElementById('phasePairings').style.display = 'none';
         document.getElementById('genPairBtn').style.display = tournament.player_count > 0 ? 'inline-block' : 'none';
         document.getElementById('advanceBtn').style.display = 'none';
+        document.getElementById('toggleImportBtn').style.display = tournament.player_count > 0 ? 'inline-block' : 'none';
         if (tournament.player_count > 0) loadPlayerList();
       } else if (tournament.status === 'PAIRING_PUBLISHED') {
         document.getElementById('phaseSetup').style.display = 'none';
@@ -166,6 +176,7 @@
         document.getElementById('genPairBtn').style.display = 'none';
         document.getElementById('advanceBtn').style.display = 'inline-block';
         document.getElementById('roundLabel').textContent = '📊 第 ' + tournament.current_round + ' 轮对阵表';
+        document.getElementById('toggleImportBtn').style.display = 'none';
         loadPlayerList();
         loadPairings();
       } else if (tournament.status === 'ROUND_ENDED') {
@@ -175,6 +186,7 @@
         document.getElementById('genPairBtn').style.display = 'inline-block';
         document.getElementById('advanceBtn').style.display = 'none';
         document.getElementById('roundLabel').textContent = '✅ 第 ' + tournament.current_round + ' 轮已完成 — 点击生成下一轮配对';
+        document.getElementById('toggleImportBtn').style.display = 'none';
         loadPlayerList();
         loadPairings();
       } else if (tournament.status === 'FINISHED') {
@@ -184,9 +196,16 @@
         document.getElementById('roundLabel').textContent = '🏆 比赛结束 — 第 ' + tournament.current_round + ' 轮（最终）';
         document.getElementById('genPairBtn').style.display = 'none';
         document.getElementById('advanceBtn').style.display = 'none';
+        document.getElementById('toggleImportBtn').style.display = 'none';
         loadPlayerList();
         loadPairings();
       }
+    }
+
+    // ── 切换导入区域显示 ──
+    function toggleImport() {
+      const el = document.getElementById('phaseSetup');
+      el.style.display = el.style.display === 'none' ? 'block' : 'none';
     }
 
     // ── 导入选手 ──
@@ -339,34 +358,38 @@
 
     // ── 生成配对 ──
     async function handleGenerate() {
-      const btn = document.getElementById('genPairBtn');
-      btn.disabled = true;
-      btn.textContent = '生成中...';
+      const genBtn = document.getElementById('genPairBtn');
+      genBtn.disabled = true;
+      genBtn.textContent = '生成中...';
       try {
-        const result = await generatePairings(tournamentId);
+        await generatePairings(tournamentId);
         tournament = await getTournament(tournamentId);
         renderUI();
       } catch (err) {
         alert('生成配对失败: ' + err.message);
-        btn.disabled = false;
-        btn.textContent = '🎲 生成当前轮配对';
+      } finally {
+        // 始终重置按钮状态（renderUI 可能隐藏了按钮，但下次显示时需恢复）
+        genBtn.disabled = false;
+        genBtn.textContent = '🎲 生成当前轮配对';
       }
     }
 
     // ── 发布成绩 & 进入下一轮 ──
     async function handleAdvance() {
       if (!confirm('确认所有本轮成绩已录入完毕，发布并进入下一轮？')) return;
-      const btn = document.getElementById('advanceBtn');
-      btn.disabled = true;
-      btn.textContent = '发布中...';
+      const advBtn = document.getElementById('advanceBtn');
+      advBtn.disabled = true;
+      advBtn.textContent = '发布中...';
       try {
         await advanceRound(tournamentId);
         tournament = await getTournament(tournamentId);
         renderUI();
       } catch (err) {
         alert('发布失败: ' + err.message);
-        btn.disabled = false;
-        btn.textContent = '✅ 发布成绩 & 进入下一轮';
+      } finally {
+        // 始终重置按钮状态
+        advBtn.disabled = false;
+        advBtn.textContent = '✅ 发布成绩 & 进入下一轮';
       }
     }
 

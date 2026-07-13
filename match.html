@@ -148,13 +148,11 @@
     <div class="tab-content" id="tab-standings">
       <figure style="overflow-x:auto;">
         <table class="standings-table striped" id="standingsTable">
-          <thead>
-            <tr>
-              <th>#</th><th>姓名</th><th>年级</th><th>积分</th><th>对局</th><th>Buchholz</th>
-            </tr>
+          <thead id="standingsHead">
+            <tr><th>#</th><th>姓名</th><th>年级</th><th>积分</th><th>对局</th></tr>
           </thead>
           <tbody id="standingsBody">
-            <tr><td colspan="6" style="text-align:center;color:var(--pico-muted-color);">加载中...</td></tr>
+            <tr><td colspan="10" style="text-align:center;color:var(--pico-muted-color);">加载中...</td></tr>
           </tbody>
         </table>
       </figure>
@@ -182,6 +180,11 @@
       try {
         const tournament = await getTournament(tournamentId);
         document.getElementById('tName').textContent = tournament.name;
+
+        // 解析破同分规则，用于积分榜动态列
+        try {
+          tbKeys = JSON.parse(tournament.tie_breakers || '["buchholz","median","direct","sonneborn"]');
+        } catch { tbKeys = ['buchholz', 'median', 'direct', 'sonneborn']; }
 
         const badge = document.getElementById('roundBadge');
         if (tournament.status === 'FINISHED') {
@@ -286,26 +289,44 @@
       }
     }
 
+    const TB_LABELS = {
+      buchholz: '对手分', median: '中间分', direct: '直胜',
+      sonneborn: '索尼伯恩', progressive: '累进分'
+    };
+    let tbKeys = []; // 当前比赛的破同分规则（在 init 中填充）
+
     async function loadStandings(tournament) {
       try {
         const standings = await getStandings(tournamentId);
+        const thead = document.getElementById('standingsHead');
         const tbody = document.getElementById('standingsBody');
 
+        // 动态表头：基础列 + 所有破同分列
+        const tbHeaders = tbKeys.map(k => TB_LABELS[k] || k);
+        const colSpan = 5 + tbKeys.length;
+        thead.innerHTML = '<tr><th>#</th><th>姓名</th><th>年级</th><th>积分</th><th>对局</th>'
+          + tbHeaders.map(h => '<th>' + h + '</th>').join('') + '</tr>';
+
         if (standings.length === 0) {
-          tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;">暂无数据</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="' + colSpan + '" style="text-align:center;">暂无数据</td></tr>';
           return;
         }
 
-        tbody.innerHTML = standings.map(p => `
+        tbody.innerHTML = standings.map(p => {
+          const tbValues = tbKeys.map(k => {
+            const v = p[k];
+            return '<td>' + (typeof v === 'number' ? v.toFixed(1) : (v || '0')) + '</td>';
+          }).join('');
+          return `
           <tr class="${p.rank <= 3 ? 'rank-' + p.rank : ''}">
             <td>${p.rank}</td>
             <td><strong>${escHtml(p.name)}</strong></td>
             <td>${escHtml(p.grade || '-')}</td>
             <td><strong>${p.score}</strong></td>
             <td>${p.games_played}</td>
-            <td>${p.buchholz.toFixed(1)}</td>
-          </tr>
-        `).join('');
+            ${tbValues}
+          </tr>`;
+        }).join('');
       } catch (err) {
         console.error('Standings error:', err);
       }
