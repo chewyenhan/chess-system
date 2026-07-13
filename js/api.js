@@ -5,16 +5,16 @@
 // ⚠️ 部署时改为此 Worker URL
 const API_BASE = 'https://chess-system.chewyenhan.workers.dev';
 
-// ── Token 管理（sessionStorage，区别于评语系统的 report_token） ──
-// key: tournament_{id}_admin
+// ── Token 管理（localStorage，持久存储不随标签页关闭丢失） ──
+// key: chess_admin_{id}
 function getToken(tournamentId) {
-  return sessionStorage.getItem('chess_admin_' + (tournamentId || ''));
+  return localStorage.getItem('chess_admin_' + (tournamentId || ''));
 }
 function setToken(tournamentId, token) {
-  sessionStorage.setItem('chess_admin_' + tournamentId, token);
+  localStorage.setItem('chess_admin_' + tournamentId, token);
 }
 function clearToken(tournamentId) {
-  sessionStorage.removeItem('chess_admin_' + tournamentId);
+  localStorage.removeItem('chess_admin_' + tournamentId);
 }
 
 // 保存当前管理的比赛 ID 列表（方便首页查找已有比赛）
@@ -125,6 +125,13 @@ async function submitResult(tournamentId, matchId, result) {
 async function advanceRound(tournamentId) {
   return fetchWithAuth(tournamentId, '/api/tournaments/' + tournamentId + '/advance', {
     method: 'PUT',
+  });
+}
+
+/** 删除比赛（需 admin_token） */
+async function deleteTournament(tournamentId) {
+  return fetchWithAuth(tournamentId, '/api/tournaments/' + tournamentId, {
+    method: 'DELETE',
   });
 }
 

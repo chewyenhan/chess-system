@@ -183,6 +183,14 @@ export default {
         }
       }
 
+      // DELETE /api/tournaments/:id — 删除比赛
+      if (method === 'DELETE' && path.startsWith('/api/tournaments/')) {
+        const params = extractParams(path, 'api/tournaments/:id');
+        if (params && !params._rest) {
+          return handleDeleteTournament(request, env, params, tournament, cors);
+        }
+      }
+
       // PUT /api/tournaments/:id/advance — 进入下一轮
       if (method === 'PUT' && path.endsWith('/advance')) {
         const params = extractParams(path, 'api/tournaments/:id/advance');
@@ -548,6 +556,21 @@ async function handleSubmitResult(request, env, params, tournament, cors) {
   } catch (err) {
     console.error('Submit result error:', err);
     return json({ error: '录入结果失败: ' + err.message }, 500, cors);
+  }
+}
+
+/** DELETE /api/tournaments/:id — 删除比赛（级联删除 matches + players） */
+async function handleDeleteTournament(request, env, params, tournament, cors) {
+  if (!tournament || tournament.id !== params.id) {
+    return json({ error: '无权限操作此比赛' }, 401, cors);
+  }
+  try {
+    await env.DB.prepare('DELETE FROM matches WHERE tournament_id = ?').bind(params.id).run();
+    await env.DB.prepare('DELETE FROM players WHERE tournament_id = ?').bind(params.id).run();
+    await env.DB.prepare('DELETE FROM tournaments WHERE id = ?').bind(params.id).run();
+    return json({ success: true }, 200, cors);
+  } catch (err) {
+    return json({ error: '删除比赛失败: ' + err.message }, 500, cors);
   }
 }
 

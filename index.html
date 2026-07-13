@@ -63,6 +63,9 @@
             <option value="7">7 轮（适合16-32人）</option>
             <option value="9">9 轮（适合32人以上）</option>
           </select>
+          <label for="playerInput" style="margin-top:1rem;">👥 参赛选手名单</label>
+          <textarea id="playerInput" rows="5" placeholder="每行一位：姓名 或 姓名,年级&#10;例：&#10;张三,初一&#10;李四,初二&#10;王五&#10;赵六,初三"></textarea>
+          <small style="color:var(--pico-muted-color);">可留空，稍后在管理页导入。已有人数：<strong id="playerCountPreview">0</strong></small>
           <label style="margin-top:1rem;">🏅 破同分规则（按优先级排序）</label>
           <fieldset style="margin-bottom:0;">
             <label><input type="checkbox" id="tbBuchholz" checked> ① 对手分 (Buchholz) — 所有对手的积分之和</label>
@@ -96,6 +99,12 @@
   <script src="js/api.js"></script>
   <script src="js/utils.js"></script>
   <script>
+    // ── 实时统计输入人数 ──
+    document.getElementById('playerInput').addEventListener('input', function() {
+      const lines = this.value.trim().split('\n').filter(l => l.trim());
+      document.getElementById('playerCountPreview').textContent = lines.length;
+    });
+
     // ── 渲染已保存的比赛列表 ──
     function renderSaved() {
       const list = getSavedTournaments();
@@ -110,11 +119,37 @@
             <a href="admin.html?id=${escHtml(t.id)}">${escHtml(t.name)}</a>
             <span style="color:var(--pico-muted-color); font-size:0.8rem; margin-left:0.5rem;">${escHtml(t.id.slice(0,8))}...</span>
           </div>
-          <div>
+          <div style="display:flex; align-items:center; gap:0.5rem;">
             <a href="match.html?id=${escHtml(t.id)}" class="badge" style="text-decoration:none;">学生看板</a>
+            <button onclick="handleDeleteSaved('${escHtml(t.id)}','${escHtml(t.name)}')" class="outline secondary" style="font-size:0.75rem; padding:0.15rem 0.4rem; color:#dc2626; border-color:#dc2626;" title="删除此比赛">🗑</button>
           </div>
         </div>
       `).join('');
+    }
+
+    // ── 删除已保存的比赛 ──
+    async function handleDeleteSaved(tournamentId, tournamentName) {
+      if (!confirm('⚠️ 确定要删除比赛「' + tournamentName + '」吗？\n\n此操作不可恢复，将同时删除所有选手和对战记录。')) return;
+
+      // 尝试从已保存列表恢复 token
+      const saved = getSavedTournaments().find(t => t.id === tournamentId);
+      if (saved && saved.token) {
+        setToken(tournamentId, saved.token);
+      }
+
+      try {
+        await deleteTournament(tournamentId);
+      } catch (err) {
+        // 如果 API 失败（404 等），仍然从本地列表移除
+        console.warn('API 删除失败（可能已不存在）:', err.message);
+      }
+
+      // 从本地列表移除
+      clearToken(tournamentId);
+      const list = getSavedTournaments().filter(t => t.id !== tournamentId);
+      localStorage.setItem('chess_tournaments', JSON.stringify(list));
+      renderSaved();
+      alert('✅ 已删除「' + tournamentName + '」');
     }
 
     // ── 创建比赛 ──
@@ -122,6 +157,7 @@
       e.preventDefault();
       const name = document.getElementById('tName').value.trim();
       const rounds = parseInt(document.getElementById('tRounds').value);
+      const playerRaw = document.getElementById('playerInput').value.trim();
 
       // 收集破同分规则
       const tieBreakers = [];
@@ -142,6 +178,21 @@
         const t = await createTournament(name, rounds, tieBreakers);
         setToken(t.id, t.admin_token);
         saveTournament(t.id, t.name, t.admin_token);
+
+        // 如果首页填了选手名单，直接导入
+        if (playerRaw) {
+          const lines = playerRaw.split('\n').filter(l => l.trim());
+          const players = lines.map(l => {
+            const parts = l.split(/[,，]/);
+            return { name: parts[0].trim(), grade: (parts[1] || '').trim() };
+          }).filter(p => p.name);
+
+          if (players.length > 0) {
+            btn.textContent = '导入选手中...';
+            await importPlayers(t.id, players);
+          }
+        }
+
         window.location.href = 'admin.html?id=' + t.id;
       } catch (err) {
         showError(errEl, err.message);
