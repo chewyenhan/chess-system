@@ -47,11 +47,15 @@ async function fetchWithAuth(tournamentId, path, options = {}) {
 // ── 公开 API ──
 
 /** 创建新比赛 */
-async function createTournament(name, totalRounds = 5) {
+async function createTournament(name, totalRounds = 5, tieBreakers = null) {
+  const body = { name, total_rounds: totalRounds };
+  if (tieBreakers && tieBreakers.length > 0) {
+    body.tie_breakers = JSON.stringify(tieBreakers);
+  }
   const res = await fetch(API_BASE + '/api/tournaments', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name, total_rounds: totalRounds }),
+    body: JSON.stringify(body),
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || '创建失败');

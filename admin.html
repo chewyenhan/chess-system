@@ -156,12 +156,25 @@
         document.getElementById('phaseSetup').style.display = 'block';
         document.getElementById('phasePlayers').style.display = tournament.player_count > 0 ? 'block' : 'none';
         document.getElementById('phasePairings').style.display = 'none';
+        document.getElementById('genPairBtn').style.display = tournament.player_count > 0 ? 'inline-block' : 'none';
+        document.getElementById('advanceBtn').style.display = 'none';
         if (tournament.player_count > 0) loadPlayerList();
-      } else if (tournament.status === 'PAIRING_PUBLISHED' || tournament.status === 'ROUND_ENDED') {
+      } else if (tournament.status === 'PAIRING_PUBLISHED') {
         document.getElementById('phaseSetup').style.display = 'none';
         document.getElementById('phasePlayers').style.display = 'block';
         document.getElementById('phasePairings').style.display = 'block';
+        document.getElementById('genPairBtn').style.display = 'none';
+        document.getElementById('advanceBtn').style.display = 'inline-block';
         document.getElementById('roundLabel').textContent = '📊 第 ' + tournament.current_round + ' 轮对阵表';
+        loadPlayerList();
+        loadPairings();
+      } else if (tournament.status === 'ROUND_ENDED') {
+        document.getElementById('phaseSetup').style.display = 'none';
+        document.getElementById('phasePlayers').style.display = 'block';
+        document.getElementById('phasePairings').style.display = 'block';
+        document.getElementById('genPairBtn').style.display = 'inline-block';
+        document.getElementById('advanceBtn').style.display = 'none';
+        document.getElementById('roundLabel').textContent = '✅ 第 ' + tournament.current_round + ' 轮已完成 — 点击生成下一轮配对';
         loadPlayerList();
         loadPairings();
       } else if (tournament.status === 'FINISHED') {
@@ -285,7 +298,15 @@
                 <button onclick="handleResult('${m.id}','BLACK_WIN')">⚫ 黑胜</button>
               </div>`;
           } else {
-            actionHtml = '<span>' + (RESULT_LABELS[m.result] || m.result) + '</span>';
+            // 已录入的结果可点击修改（当前选中高亮）
+            const sel = m.result;
+            actionHtml = `
+              <div class="result-btns">
+                <button onclick="handleResult('${m.id}','WHITE_WIN')" style="${sel==='WHITE_WIN'?'font-weight:bold;border:2px solid var(--pico-primary);':''}">⚪</button>
+                <button onclick="handleResult('${m.id}','DRAW')" style="${sel==='DRAW'?'font-weight:bold;border:2px solid var(--pico-primary);':''}">🤝</button>
+                <button onclick="handleResult('${m.id}','BLACK_WIN')" style="${sel==='BLACK_WIN'?'font-weight:bold;border:2px solid var(--pico-primary);':''}">⚫</button>
+                <button onclick="handleResult('${m.id}','PENDING')" style="font-size:0.75rem;opacity:0.6;" title="撤销结果">↩</button>
+              </div>`;
           }
 
           return `
