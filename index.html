@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="zh" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>学校国际象棋比赛系统</title>
+  <link rel="stylesheet" href="css/pico.min.css">
+  <style>
+    :root {
+      --pico-primary: #1a56db;
+      --pico-primary-background: #1a56db;
+      --pico-primary-hover: #1e40af;
+      --pico-primary-hover-background: #1e40af;
+    }
+    body {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      background: linear-gradient(135deg, #f0f4ff 0%, #e8f0fe 50%, #f8fafc 100%);
+    }
+    main {
+      flex: 1;
+      padding: 2rem 0;
+    }
+    .hero {
+      text-align: center;
+      padding: 3rem 1rem 2rem;
+    }
+    .hero h1 { font-size: 2.2rem; margin-bottom: 0.5rem; }
+    .hero p { color: var(--pico-muted-color); font-size: 1.1rem; }
+    .card-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; max-width: 800px; margin: 0 auto; }
+    @media (max-width: 700px) { .card-grid { grid-template-columns: 1fr; } }
+    .card-grid article header { text-align: center; }
+    .card-grid article h3 { margin-bottom: 0.3rem; }
+    .saved-list { margin-top: 1rem; }
+    .saved-item { display: flex; justify-content: space-between; align-items: center; padding: 0.5rem 0; border-bottom: 1px solid var(--pico-muted-border-color); }
+    .saved-item:last-child { border-bottom: none; }
+    .saved-item a { text-decoration: none; font-weight: 500; }
+    .badge { font-size: 0.75rem; padding: 0.15rem 0.5rem; border-radius: 1rem; background: var(--pico-primary-background); color: white; }
+    textarea { font-family: monospace; font-size: 0.9rem; }
+    .site-footer { text-align: center; padding: 1rem; font-size: 0.8rem; color: var(--pico-muted-color); }
+  </style>
+</head>
+<body>
+  <main class="container">
+    <div class="hero">
+      <h1>♟️ 学校国际象棋比赛系统</h1>
+      <p>瑞士制自动配对 · 实时积分榜 · 手机看板</p>
+    </div>
+
+    <div class="card-grid">
+      <!-- 左侧：创建新比赛 -->
+      <article>
+        <header><h3>🆕 创建新比赛</h3>
+        <p style="color:var(--pico-muted-color);">输入比赛名称和轮次即可开始</p></header>
+        <form id="createForm" onsubmit="handleCreate(event)">
+          <label for="tName">比赛名称</label>
+          <input type="text" id="tName" placeholder="例：初一国际象棋锦标赛" required>
+          <label for="tRounds" style="margin-top:1rem;">总轮次</label>
+          <select id="tRounds">
+            <option value="3">3 轮</option>
+            <option value="5" selected>5 轮（推荐）</option>
+            <option value="7">7 轮</option>
+            <option value="9">9 轮</option>
+          </select>
+          <div id="createError" style="color:#dc2626; font-size:0.9rem; margin-top:0.5rem; display:none;"></div>
+          <button type="submit" id="createBtn" style="width:100%; margin-top:1rem;">创建比赛</button>
+        </form>
+      </article>
+
+      <!-- 右侧：已有比赛 -->
+      <article>
+        <header><h3>📋 管理已有比赛</h3>
+        <p style="color:var(--pico-muted-color);">在此浏览器上管理过的比赛会自动保存</p></header>
+        <div class="saved-list" id="savedList">
+          <p style="color:var(--pico-muted-color); font-size:0.9rem;">暂无保存的比赛。创建新比赛后会自动出现在这里。</p>
+        </div>
+        <footer style="text-align:center;">
+          <p style="font-size:0.85rem; color:var(--pico-muted-color);">
+            💡 学生看板地址：<code>match.html?id=比赛ID</code>
+          </p>
+        </footer>
+      </article>
+    </div>
+  </main>
+
+  <div class="site-footer">© 2026 华联中学 · Hua Lian High School</div>
+
+  <script src="js/api.js"></script>
+  <script src="js/utils.js"></script>
+  <script>
+    // ── 渲染已保存的比赛列表 ──
+    function renderSaved() {
+      const list = getSavedTournaments();
+      const container = document.getElementById('savedList');
+      if (list.length === 0) {
+        container.innerHTML = '<p style="color:var(--pico-muted-color); font-size:0.9rem;">暂无保存的比赛。</p>';
+        return;
+      }
+      container.innerHTML = list.map(t => `
+        <div class="saved-item">
+          <div>
+            <a href="admin.html?id=${escHtml(t.id)}">${escHtml(t.name)}</a>
+            <span style="color:var(--pico-muted-color); font-size:0.8rem; margin-left:0.5rem;">${escHtml(t.id.slice(0,8))}...</span>
+          </div>
+          <div>
+            <a href="match.html?id=${escHtml(t.id)}" class="badge" style="text-decoration:none;">学生看板</a>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    // ── 创建比赛 ──
+    async function handleCreate(e) {
+      e.preventDefault();
+      const name = document.getElementById('tName').value.trim();
+      const rounds = parseInt(document.getElementById('tRounds').value);
+      const btn = document.getElementById('createBtn');
+      const errEl = document.getElementById('createError');
+
+      if (!name) { showError(errEl, '请输入比赛名称'); return; }
+      hideError(errEl);
+      btn.disabled = true;
+      btn.textContent = '创建中...';
+
+      try {
+        const t = await createTournament(name, rounds);
+        setToken(t.id, t.admin_token);
+        saveTournament(t.id, t.name, t.admin_token);
+        window.location.href = 'admin.html?id=' + t.id;
+      } catch (err) {
+        showError(errEl, err.message);
+        btn.disabled = false;
+        btn.textContent = '创建比赛';
+      }
+    }
+
+    renderSaved();
+  </script>
+</body>
+</html>

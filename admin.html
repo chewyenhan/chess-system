@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="zh" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>比赛管理 — 国际象棋比赛系统</title>
+  <link rel="stylesheet" href="css/pico.min.css">
+  <style>
+    :root {
+      --pico-primary: #1a56db;
+      --pico-primary-background: #1a56db;
+      --pico-primary-hover: #1e40af;
+      --pico-primary-hover-background: #1e40af;
+    }
+    body {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      background: linear-gradient(135deg, #f0f4ff 0%, #e8f0fe 50%, #f8fafc 100%);
+    }
+    main { flex: 1; padding: 1.5rem 0; }
+    .top-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.5rem; }
+    .status-flow { display: flex; gap: 0.5rem; margin-bottom: 1.5rem; flex-wrap: wrap; }
+    .step { padding: 0.4rem 0.8rem; border-radius: 0.5rem; font-size: 0.85rem; background: var(--pico-muted-border-color); color: var(--pico-muted-color); }
+    .step.active { background: var(--pico-primary-background); color: white; font-weight: bold; }
+    .step.done { background: #16a34a; color: white; }
+    .section-title { font-size: 1.1rem; font-weight: bold; margin-bottom: 0.75rem; }
+    .pairing-grid { display: grid; gap: 0.5rem; }
+    .pairing-row { display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; background: var(--pico-card-background-color); border-radius: 0.25rem; border: 1px solid var(--pico-muted-border-color); flex-wrap: wrap; }
+    .board-num { font-weight: bold; min-width: 3rem; }
+    .player-name { flex: 1; min-width: 100px; }
+    .vs { color: var(--pico-muted-color); }
+    .result-btns { display: flex; gap: 0.3rem; }
+    .result-btns button { font-size: 0.85rem; padding: 0.3rem 0.6rem; }
+    .player-table { width: 100%; font-size: 0.9rem; }
+    .site-footer { text-align: center; padding: 1rem; font-size: 0.8rem; color: var(--pico-muted-color); }
+    .empty-state { text-align: center; padding: 2rem; color: var(--pico-muted-color); }
+    .tournament-id { font-family: monospace; font-size: 0.85rem; color: var(--pico-muted-color); }
+  </style>
+</head>
+<body>
+  <main class="container-fluid" style="max-width:900px;">
+    <!-- 顶部栏 -->
+    <div class="top-bar">
+      <div>
+        <h2 id="tName" style="margin:0;">加载中...</h2>
+        <span class="tournament-id" id="tId"></span>
+      </div>
+      <div>
+        <a href="index.html" class="outline" role="button" style="margin-right:0.5rem;">🏠 首页</a>
+        <a id="matchLink" href="#" class="secondary" role="button">📱 学生看板</a>
+      </div>
+    </div>
+
+    <!-- 状态流 -->
+    <div class="status-flow" id="statusFlow">
+      <span class="step" id="step0">① 导入选手</span>
+      <span>→</span>
+      <span class="step" id="step1">② 生成配对</span>
+      <span>→</span>
+      <span class="step" id="step2">③ 录入成绩</span>
+      <span>→</span>
+      <span class="step" id="step3">④ 发布下一轮</span>
+    </div>
+
+    <div id="errorMsg" style="color:#dc2626; margin-bottom:1rem; display:none;"></div>
+
+    <!-- 阶段 1：导入选手（SETUP） -->
+    <article id="phaseSetup" style="display:none;">
+      <header><span class="section-title">📋 导入选手名单</span></header>
+      <p style="font-size:0.9rem; color:var(--pico-muted-color);">每行一位选手：<strong>姓名</strong> 或 <strong>姓名,年级</strong></p>
+      <textarea id="playerInput" rows="8" placeholder="例：&#10;张三,初一&#10;李四,初二&#10;王五&#10;赵六,初三"></textarea>
+      <div style="margin-top:1rem;">
+        <button id="importBtn" onclick="handleImport()">导入选手</button>
+        <button class="secondary" onclick="loadDemoPlayers()" style="margin-left:0.5rem;">📥 载入演示数据（11人）</button>
+      </div>
+      <div style="margin-top:1rem;" id="playerList"></div>
+    </article>
+
+    <!-- 阶段 2：已导入选手 + 生成配对按钮（SETUP / PAIRING_PUBLISHED） -->
+    <article id="phasePlayers" style="display:none;">
+      <header><span class="section-title">👥 参赛选手 (<span id="playerCount">0</span>人)</span></header>
+      <figure style="overflow-x:auto;">
+        <table class="player-table striped">
+          <thead><tr><th>#</th><th>姓名</th><th>年级</th><th>操作</th></tr></thead>
+          <tbody id="playerTableBody"></tbody>
+        </table>
+      </figure>
+      <footer>
+        <button id="genPairBtn" onclick="handleGenerate()">🎲 生成当前轮配对</button>
+      </footer>
+    </article>
+
+    <!-- 阶段 3：对阵表 + 录入成绩（PAIRING_PUBLISHED） -->
+    <article id="phasePairings" style="display:none;">
+      <header><span class="section-title" id="roundLabel">📊 第 N 轮对阵表</span></header>
+      <div class="pairing-grid" id="pairingGrid"></div>
+      <footer style="margin-top:1rem;">
+        <button id="advanceBtn" onclick="handleAdvance()">✅ 发布成绩 & 进入下一轮</button>
+        <button class="secondary" onclick="handleGenerate()">🔄 重新生成配对</button>
+      </footer>
+    </article>
+  </main>
+
+  <div class="site-footer">© 2026 华联中学 · Hua Lian High School</div>
+
+  <script src="js/api.js"></script>
+  <script src="js/utils.js"></script>
+  <script>
+    // ── 全局状态 ──
+    const tournamentId = getParam('id');
+    let tournament = null;
+
+    // ── 初始化 ──
+    async function init() {
+      if (!tournamentId) {
+        document.body.innerHTML = '<main class="container"><article><header><h2>❌ 缺少比赛 ID</h2></header><p>请在 URL 后加上 ?id=比赛ID</p><a href="index.html">返回首页</a></article></main>';
+        return;
+      }
+
+      document.getElementById('matchLink').href = 'match.html?id=' + tournamentId;
+
+      // 尝试从本地取 token
+      const savedToken = getToken(tournamentId);
+      // 也尝试从 localStorage 的已保存比赛列表中获取
+      if (!savedToken) {
+        const saved = getSavedTournaments().find(t => t.id === tournamentId);
+        if (saved && saved.token) {
+          setToken(tournamentId, saved.token);
+        }
+      }
+
+      try {
+        tournament = await getTournament(tournamentId);
+        document.getElementById('tName').textContent = tournament.name;
+        document.getElementById('tId').textContent = 'ID: ' + tournament.id;
+        renderUI();
+      } catch (err) {
+        showError('errorMsg', err.message);
+      }
+    }
+
+    // ── 根据比赛状态渲染 UI ──
+    function renderUI() {
+      // 状态流高亮
+      const statusOrder = ['SETUP', 'PAIRING_PUBLISHED', 'ROUND_ENDED', 'FINISHED'];
+      const currentIdx = statusOrder.indexOf(tournament.status);
+      // 在 PAIRING_PUBLISHED 期间 step0 和 step1 都是 done
+      document.getElementById('step0').className = currentIdx >= 0 ? 'step done' : 'step active';
+      document.getElementById('step1').className = currentIdx >= 1 ? 'step done' : (currentIdx === 0 && tournament.player_count > 0 ? 'step active' : 'step');
+      document.getElementById('step2').className = currentIdx >= 2 ? 'step done' : (currentIdx === 1 ? 'step active' : 'step');
+      document.getElementById('step3').className = currentIdx >= 3 ? 'step done' : 'step';
+
+      // 显示/隐藏各阶段
+      if (tournament.status === 'SETUP') {
+        document.getElementById('phaseSetup').style.display = 'block';
+        document.getElementById('phasePlayers').style.display = tournament.player_count > 0 ? 'block' : 'none';
+        document.getElementById('phasePairings').style.display = 'none';
+        if (tournament.player_count > 0) loadPlayerList();
+      } else if (tournament.status === 'PAIRING_PUBLISHED' || tournament.status === 'ROUND_ENDED') {
+        document.getElementById('phaseSetup').style.display = 'none';
+        document.getElementById('phasePlayers').style.display = 'block';
+        document.getElementById('phasePairings').style.display = 'block';
+        document.getElementById('roundLabel').textContent = '📊 第 ' + tournament.current_round + ' 轮对阵表';
+        loadPlayerList();
+        loadPairings();
+      } else if (tournament.status === 'FINISHED') {
+        document.getElementById('phaseSetup').style.display = 'none';
+        document.getElementById('phasePlayers').style.display = 'block';
+        document.getElementById('phasePairings').style.display = 'block';
+        document.getElementById('roundLabel').textContent = '🏆 比赛结束 — 第 ' + tournament.current_round + ' 轮（最终）';
+        document.getElementById('genPairBtn').style.display = 'none';
+        document.getElementById('advanceBtn').style.display = 'none';
+        loadPlayerList();
+        loadPairings();
+      }
+    }
+
+    // ── 导入选手 ──
+    async function handleImport() {
+      const raw = document.getElementById('playerInput').value.trim();
+      if (!raw) { showError('errorMsg', '请输入选手名单'); return; }
+
+      const lines = raw.split('\n').filter(l => l.trim());
+      const players = lines.map(l => {
+        const parts = l.split(/[,，]/);
+        return {
+          name: parts[0].trim(),
+          grade: (parts[1] || '').trim(),
+        };
+      }).filter(p => p.name);
+
+      if (players.length === 0) { showError('errorMsg', '没有识别到有效选手'); return; }
+
+      const btn = document.getElementById('importBtn');
+      btn.disabled = true;
+      btn.textContent = '导入中...';
+      hideError('errorMsg');
+
+      try {
+        await importPlayers(tournamentId, players);
+        // 刷新比赛信息
+        tournament = await getTournament(tournamentId);
+        document.getElementById('playerInput').value = '';
+        hideError('errorMsg');
+        renderUI();
+      } catch (err) {
+        showError('errorMsg', err.message);
+        btn.disabled = false;
+        btn.textContent = '导入选手';
+      }
+    }
+
+    // ── 载入演示数据 ──
+    function loadDemoPlayers() {
+      const demo = [
+        '陈小明,初一', '林志强,初二', '黄伟杰,初三', '张嘉豪,高一',
+        '刘俊杰,高二', '杨凯文,高三', '周建华,初一', '吴彦祖,初二',
+        '郑国辉,初三', '马天赐,高一', '赵瑞林,高二'
+      ];
+      document.getElementById('playerInput').value = demo.join('\n');
+    }
+
+    // ── 加载选手列表 ──
+    async function loadPlayerList() {
+      try {
+        const t = await getTournament(tournamentId);
+        document.getElementById('playerCount').textContent = t.player_count || 0;
+
+        // 重新获取完整选手列表
+        const matches = await getMatches(tournamentId);
+        const playerMap = new Map();
+        matches.forEach(m => {
+          if (m.white_player_id && m.white_name) playerMap.set(m.white_player_id, { name: m.white_name, grade: m.white_grade });
+          if (m.black_player_id && m.black_name) playerMap.set(m.black_player_id, { name: m.black_name, grade: m.black_grade });
+        });
+
+        // 从 standings 获取完整选手列表
+        const standings = await getStandings(tournamentId);
+        const tbody = document.getElementById('playerTableBody');
+        if (standings.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:var(--pico-muted-color);">暂无选手数据</td></tr>';
+          return;
+        }
+        tbody.innerHTML = standings.map((p, i) => `
+          <tr>
+            <td>${i + 1}</td>
+            <td>${escHtml(p.name)}</td>
+            <td>${escHtml(p.grade || '-')}</td>
+            <td><button class="outline secondary" style="font-size:0.8rem; padding:0.2rem 0.5rem;" onclick="handleRemovePlayer('${escHtml(p.id)}')">退赛</button></td>
+          </tr>
+        `).join('');
+        document.getElementById('playerCount').textContent = standings.length;
+      } catch (err) {
+        console.error('Load players error:', err);
+      }
+    }
+
+    // ── 加载对阵表 ──
+    async function loadPairings() {
+      try {
+        const matches = await getMatches(tournamentId, tournament.current_round);
+        const grid = document.getElementById('pairingGrid');
+        const isFinished = tournament.status === 'FINISHED';
+
+        if (matches.length === 0) {
+          grid.innerHTML = '<p class="empty-state">暂无本回合对局数据</p>';
+          return;
+        }
+
+        grid.innerHTML = matches.map(m => {
+          const white = m.white_name || '—';
+          const black = m.black_name || '—';
+          const isPending = m.result === 'PENDING';
+          const isBye = m.result === 'BYE';
+
+          let actionHtml = '';
+          if (isBye) {
+            actionHtml = '<span style="color:var(--pico-muted-color);">🔄 轮空</span>';
+          } else if (isPending && !isFinished) {
+            actionHtml = `
+              <div class="result-btns">
+                <button onclick="handleResult('${m.id}','WHITE_WIN')">⚪ 白胜</button>
+                <button onclick="handleResult('${m.id}','DRAW')">🤝 平局</button>
+                <button onclick="handleResult('${m.id}','BLACK_WIN')">⚫ 黑胜</button>
+              </div>`;
+          } else {
+            actionHtml = '<span>' + (RESULT_LABELS[m.result] || m.result) + '</span>';
+          }
+
+          return `
+            <div class="pairing-row">
+              <span class="board-num">桌 ${m.board_number}</span>
+              <span class="player-name">⚪ ${escHtml(white)}</span>
+              <span class="vs">vs</span>
+              <span class="player-name">⚫ ${escHtml(black)}</span>
+              ${actionHtml}
+            </div>`;
+        }).join('');
+
+        if (isFinished) {
+          document.getElementById('advanceBtn').style.display = 'none';
+        }
+      } catch (err) {
+        console.error('Load pairings error:', err);
+      }
+    }
+
+    // ── 录入比赛结果 ──
+    async function handleResult(matchId, result) {
+      try {
+        await submitResult(tournamentId, matchId, result);
+        loadPairings();
+      } catch (err) {
+        alert('录入失败: ' + err.message);
+      }
+    }
+
+    // ── 生成配对 ──
+    async function handleGenerate() {
+      const btn = document.getElementById('genPairBtn');
+      btn.disabled = true;
+      btn.textContent = '生成中...';
+      try {
+        const result = await generatePairings(tournamentId);
+        tournament = await getTournament(tournamentId);
+        renderUI();
+      } catch (err) {
+        alert('生成配对失败: ' + err.message);
+        btn.disabled = false;
+        btn.textContent = '🎲 生成当前轮配对';
+      }
+    }
+
+    // ── 发布成绩 & 进入下一轮 ──
+    async function handleAdvance() {
+      if (!confirm('确认所有本轮成绩已录入完毕，发布并进入下一轮？')) return;
+      const btn = document.getElementById('advanceBtn');
+      btn.disabled = true;
+      btn.textContent = '发布中...';
+      try {
+        await advanceRound(tournamentId);
+        tournament = await getTournament(tournamentId);
+        renderUI();
+      } catch (err) {
+        alert('发布失败: ' + err.message);
+        btn.disabled = false;
+        btn.textContent = '✅ 发布成绩 & 进入下一轮';
+      }
+    }
+
+    // ── 移除选手 ──
+    async function handleRemovePlayer(playerId) {
+      if (!confirm('确定要标记此选手退赛？')) return;
+      try {
+        await removePlayer(tournamentId, playerId);
+        tournament = await getTournament(tournamentId);
+        loadPlayerList();
+      } catch (err) {
+        alert('退赛失败: ' + err.message);
+      }
+    }
+
+    init();
+  </script>
+</body>
+</html>

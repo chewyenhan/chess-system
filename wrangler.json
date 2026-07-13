@@ -1,0 +1,16 @@
+{
+  "name": "chess-system",
+  "main": "worker.js",
+  "compatibility_date": "2025-05-02",
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "chess-system-db",
+      "database_id": "0d798ed9-69aa-4ac8-bacc-06ac57cf2ef3",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "vars": {
+    "CORS_ORIGIN": "https://chewyenhan.github.io"
+  }
+}
