@@ -125,8 +125,19 @@
 
       <!-- 右侧：已有比赛 -->
       <article>
-        <header><h3>📋 管理已有比赛</h3>
-        <p style="color:var(--pico-muted-color);">在此浏览器上管理过的比赛会自动保存</p></header>
+        <header>
+          <h3>📋 管理已有比赛</h3>
+          <p style="color:var(--pico-muted-color);">在此浏览器上管理过的比赛会自动保存</p>
+        </header>
+        <div style="margin-bottom:1rem; display:flex; gap:0.5rem; flex-wrap:wrap;">
+          <input type="text" id="searchInput" placeholder="🔍 搜索比赛名称..." style="flex:1; min-width:200px;">
+          <select id="statusFilter" style="min-width:140px;">
+            <option value="">全部状态</option>
+            <option value="SETUP">🔧 准备中</option>
+            <option value="PAIRING_PUBLISHED">♟️ 对战中</option>
+            <option value="FINISHED">🏆 已结束</option>
+          </select>
+        </div>
         <div class="saved-list" id="savedList">
           <p style="color:var(--pico-muted-color); font-size:0.9rem;">暂无保存的比赛。创建新比赛后会自动出现在这里。</p>
         </div>
@@ -150,7 +161,62 @@
       document.getElementById('playerCountPreview').textContent = lines.length;
     });
 
-    // ── 渲染已保存的比赛列表 ──
+    // ── 防抖函数 ──
+    let debounceTimer;
+    function debounce(func, wait) {
+      return function(...args) {
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(() => func.apply(this, args), wait);
+      };
+    }
+
+    // ── 加载已保存的比赛（通过 API） ──
+    async function loadSaved() {
+      const search = document.getElementById('searchInput').value.trim();
+      const status = document.getElementById('statusFilter').value;
+
+      try {
+        const list = await getTournaments(search, status);
+        const container = document.getElementById('savedList');
+
+        if (!list || list.length === 0) {
+          const emptyText = search || status ? '没有匹配的比赛' : '暂无保存的比赛。创建新比赛后会自动出现在这里。';
+          container.innerHTML = `<p style="color:var(--pico-muted-color); font-size:0.9rem;">${emptyText}</p>`;
+          return;
+        }
+
+        container.innerHTML = list.map(t => {
+          const statusLabel = t.status ? STATUS_LABELS[t.status] : '-';
+          const isDeleted = t.deleted_at !== undefined && t.deleted_at !== null;
+          return `
+          <div class="saved-item" style="${isDeleted ? 'opacity:0.5;' : ''}">
+            <div>
+              <a href="admin.html?id=${escHtml(t.id)}" style="${isDeleted ? 'text-decoration:line-through;' : ''}">${escHtml(t.name)}</a>
+              <span style="color:var(--pico-muted-color); font-size:0.8rem; margin-left:0.5rem;">${escHtml(t.id.slice(0,8))}...</span>
+              <span style="color:var(--pico-muted-color); font-size:0.8rem; margin-left:0.5rem;">${statusLabel}</span>
+              ${isDeleted ? '<span style="color:#dc2626; font-size:0.75rem; margin-left:0.5rem;">(已删除)</span>' : ''}
+            </div>
+            <div style="display:flex; align-items:center; gap:0.5rem;">
+              ${isDeleted
+                ? `<button onclick="handleRestoreSaved('${escHtml(t.id)}','${escHtml(t.name)}')" class="outline secondary" style="font-size:0.75rem; padding:0.15rem 0.4rem; color:#16a34a; border-color:#16a34a;" title="恢复此比赛">↩ 恢复</button>`
+                : `<a href="match.html?id=${escHtml(t.id)}" class="badge" style="text-decoration:none;">📱 学生看板</a>`
+              }
+              <button onclick="handleDeleteSaved('${escHtml(t.id)}','${escHtml(t.name)}')" class="outline secondary" style="font-size:0.75rem; padding:0.15rem 0.4rem; color:#dc2626; border-color:#dc2626;" title="删除此比赛">🗑</button>
+            </div>
+          </div>`;
+        }).join('');
+      } catch (err) {
+        document.getElementById('savedList').innerHTML = `<p style="color:#dc2626; font-size:0.9rem;">加载失败: ${err.message}</p>`;
+      }
+    }
+
+    // ── 监听搜索框（防抖 300ms） ──
+    document.getElementById('searchInput').addEventListener('input', debounce(loadSaved, 300));
+
+    // ── 监听状态筛选 ──
+    document.getElementById('statusFilter').addEventListener('change', loadSaved);
+
+    // ── 渲染已保存的比赛（兼容旧版） ──
     function renderSaved() {
       const list = getSavedTournaments();
       const container = document.getElementById('savedList');
@@ -195,6 +261,19 @@
       localStorage.setItem('chess_tournaments', JSON.stringify(list));
       renderSaved();
       alert('✅ 已删除「' + tournamentName + '」');
+    }
+
+    // ── 恢复已删除的比赛 ──
+    async function handleRestoreSaved(tournamentId, tournamentName) {
+      if (!confirm('⚠️ 确定要恢复比赛「' + tournamentName + '」吗？\n\n恢复后将重新显示在首页。')) return;
+
+      try {
+        await restoreTournament(tournamentId);
+        alert('✅ 已恢复「' + tournamentName + '」');
+        loadSaved(); // 重新加载列表
+      } catch (err) {
+        alert('恢复失败: ' + err.message);
+      }
     }
 
     // ── 破同分规则排序（上下箭头） ──
@@ -290,7 +369,8 @@
       }
     }
 
-    renderSaved();
+    // 页面加载时初始化
+    loadSaved();
   </script>
 </body>
 </html>

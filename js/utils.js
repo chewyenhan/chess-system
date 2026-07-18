@@ -36,6 +36,7 @@ const RESULT_LABELS = {
   'BLACK_WIN': '⚫ 黑胜 (0-1)',
   'DRAW':      '🤝 平局 (½-½)',
   'BYE':       '🔄 轮空 (+1)',
+  'UNDO':      '↩️ 已撤销',
 };
 
 /** 结果简称 */
@@ -45,6 +46,7 @@ const RESULT_SHORT = {
   'DRAW':      '½-½',
   'BYE':       'BYE',
   'PENDING':   '-',
+  'UNDO':      '↩',
 };
 
 /** 生成桌号标签 */

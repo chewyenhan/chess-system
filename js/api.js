@@ -70,6 +70,20 @@ async function getTournament(id) {
   return data;
 }
 
+/** 获取比赛列表（支持搜索和筛选） */
+async function getTournaments(search = '', status = '') {
+  let url = API_BASE + '/api/tournaments';
+  const params = new URLSearchParams();
+  if (search) params.append('search', search);
+  if (status) params.append('status', status);
+  if (params.toString()) url += '?' + params.toString();
+
+  const res = await fetch(url);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || '获取失败');
+  return data.tournaments || [];
+}
+
 /** 获取积分榜（公开） */
 async function getStandings(tournamentId) {
   const res = await fetch(API_BASE + '/api/tournaments/' + tournamentId + '/standings');
@@ -132,6 +146,13 @@ async function advanceRound(tournamentId) {
 async function deleteTournament(tournamentId) {
   return fetchWithAuth(tournamentId, '/api/tournaments/' + tournamentId, {
     method: 'DELETE',
+  });
+}
+
+/** 恢复比赛（需 admin_token） */
+async function restoreTournament(tournamentId) {
+  return fetchWithAuth(tournamentId, '/api/tournaments/' + tournamentId + '/restore', {
+    method: 'POST',
   });
 }
 

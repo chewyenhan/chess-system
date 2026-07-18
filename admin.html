@@ -317,14 +317,14 @@
                 <button onclick="handleResult('${m.id}','BLACK_WIN')">⚫ 黑胜</button>
               </div>`;
           } else {
-            // 已录入的结果可点击修改（当前选中高亮）
+            // 已录入的结果可点击修改
             const sel = m.result;
             actionHtml = `
               <div class="result-btns">
                 <button onclick="handleResult('${m.id}','WHITE_WIN')" style="${sel==='WHITE_WIN'?'font-weight:bold;border:2px solid var(--pico-primary);':''}">⚪</button>
                 <button onclick="handleResult('${m.id}','DRAW')" style="${sel==='DRAW'?'font-weight:bold;border:2px solid var(--pico-primary);':''}">🤝</button>
                 <button onclick="handleResult('${m.id}','BLACK_WIN')" style="${sel==='BLACK_WIN'?'font-weight:bold;border:2px solid var(--pico-primary);':''}">⚫</button>
-                <button onclick="handleResult('${m.id}','PENDING')" style="font-size:0.75rem;opacity:0.6;" title="撤销结果">↩</button>
+                <button onclick="handleUndoResult('${m.id}')" style="font-size:0.75rem;opacity:0.6;" title="撤销结果">↩️</button>
               </div>`;
           }
 
@@ -353,6 +353,19 @@
         loadPairings();
       } catch (err) {
         alert('录入失败: ' + err.message);
+      }
+    }
+
+    // ── 撤销比赛结果 ──
+    async function handleUndoResult(matchId) {
+      if (!confirm('⚠️ 确定要撤销这局成绩吗？\n\n此操作将把成绩重置为"等待中"状态。')) return;
+
+      try {
+        await submitResult(tournamentId, matchId, 'PENDING');
+        alert('✅ 成绩已撤销');
+        loadPairings();
+      } catch (err) {
+        alert('撤销失败: ' + err.message);
       }
     }
 

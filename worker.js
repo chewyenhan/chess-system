@@ -113,6 +113,11 @@ export default {
         return handleCreateTournament(request, env, cors);
       }
 
+      // GET /api/tournaments — 比赛列表（支持搜索和筛选）
+      if (method === 'GET' && path === '/api/tournaments') {
+        return handleGetTournaments(request, env, cors);
+      }
+
       // GET /api/tournaments/:id — 比赛基本信息
       if (method === 'GET' && path.startsWith('/api/tournaments/')) {
         const params = extractParams(path, 'api/tournaments/:id');
@@ -159,6 +164,14 @@ export default {
 
       // === 管理端点（继续）===
 
+      // DELETE /api/tournaments/:id/matches/:mid — 撤销成绩
+      if (method === 'DELETE' && path.includes('/matches/')) {
+        const params = extractParams(path, 'api/tournaments/:id/matches/:mid');
+        if (params && !params._rest) {
+          return handleUndoResult(request, env, params, tournament, cors);
+        }
+      }
+
       // DELETE /api/tournaments/:id/players/:pid — 移除选手
       if (method === 'DELETE' && path.includes('/players/')) {
         const params = extractParams(path, 'api/tournaments/:id/players/:pid');
@@ -183,11 +196,19 @@ export default {
         }
       }
 
-      // DELETE /api/tournaments/:id — 删除比赛
+      // DELETE /api/tournaments/:id — 删除比赛（软删除）
       if (method === 'DELETE' && path.startsWith('/api/tournaments/')) {
         const params = extractParams(path, 'api/tournaments/:id');
         if (params && !params._rest) {
           return handleDeleteTournament(request, env, params, tournament, cors);
+        }
+      }
+
+      // POST /api/tournaments/:id/restore — 恢复比赛
+      if (method === 'POST' && path.endsWith('/restore')) {
+        const params = extractParams(path, 'api/tournaments/:id/restore');
+        if (params) {
+          return handleRestoreTournament(request, env, params, tournament, cors);
         }
       }
 
@@ -246,11 +267,52 @@ async function handleCreateTournament(request, env, cors) {
   }
 }
 
+// GET /api/tournaments — 比赛列表（支持搜索和筛选）
+async function handleGetTournaments(request, env, cors) {
+  try {
+    const url = new URL(request.url);
+    const search = url.searchParams.get('search') || '';
+    const status = url.searchParams.get('status') || '';
+
+    let query = 'SELECT id, name, total_rounds, tie_breakers, current_round, status, created_at, admin_token, deleted_at FROM tournaments';
+    let conditions = [];
+    let bindings = [];
+
+    // 搜索条件（模糊匹配名称）
+    if (search) {
+      conditions.push('name LIKE ?');
+      bindings.push('%' + search + '%');
+    }
+
+    // 状态条件
+    if (status) {
+      conditions.push('status = ?');
+      bindings.push(status);
+    }
+
+    // 排除已删除比赛
+    conditions.push('deleted_at IS NULL');
+
+    if (conditions.length > 0) {
+      query += ' WHERE ' + conditions.join(' AND ');
+    }
+
+    query += ' ORDER BY created_at DESC';
+
+    const tournaments = await env.DB.prepare(query).bind(...bindings).all();
+    return json({ tournaments: tournaments.results }, 200, cors);
+
+  } catch (err) {
+    console.error('Get tournaments error:', err);
+    return json({ error: '获取比赛列表失败: ' + err.message }, 500, cors);
+  }
+}
+
 // GET /api/tournaments/:id — 比赛基本信息
 async function handleGetTournament(request, env, params, cors) {
   try {
     const tournament = await env.DB.prepare(
-      'SELECT id, name, total_rounds, tie_breakers, current_round, status, created_at FROM tournaments WHERE id = ?'
+      'SELECT id, name, total_rounds, tie_breakers, current_round, status, deleted_at FROM tournaments WHERE id = ?'
     ).bind(params.id).first();
 
     if (!tournament) {
@@ -559,18 +621,79 @@ async function handleSubmitResult(request, env, params, tournament, cors) {
   }
 }
 
-/** DELETE /api/tournaments/:id — 删除比赛（级联删除 matches + players） */
+/** DELETE /api/tournaments/:id — 删除比赛（软删除） */
 async function handleDeleteTournament(request, env, params, tournament, cors) {
   if (!tournament || tournament.id !== params.id) {
     return json({ error: '无权限操作此比赛' }, 401, cors);
   }
   try {
-    await env.DB.prepare('DELETE FROM matches WHERE tournament_id = ?').bind(params.id).run();
-    await env.DB.prepare('DELETE FROM players WHERE tournament_id = ?').bind(params.id).run();
-    await env.DB.prepare('DELETE FROM tournaments WHERE id = ?').bind(params.id).run();
+    // 软删除：设置 deleted_at，数据仍保留在数据库
+    await env.DB.prepare(
+      'UPDATE tournaments SET deleted_at = ? WHERE id = ?'
+    ).bind(datetime('now'), params.id).run();
     return json({ success: true }, 200, cors);
   } catch (err) {
     return json({ error: '删除比赛失败: ' + err.message }, 500, cors);
+  }
+}
+
+/** POST /api/tournaments/:id/restore — 恢复比赛 */
+async function handleRestoreTournament(request, env, params, tournament, cors) {
+  if (!tournament || tournament.id !== params.id) {
+    return json({ error: '无权限操作此比赛' }, 401, cors);
+  }
+  try {
+    // 恢复比赛：设置 deleted_at 为 NULL
+    await env.DB.prepare(
+      'UPDATE tournaments SET deleted_at = ? WHERE id = ?'
+    ).bind(NULL, params.id).run();
+    return json({ success: true }, 200, cors);
+  } catch (err) {
+    return json({ error: '恢复比赛失败: ' + err.message }, 500, cors);
+  }
+}
+
+/** DELETE /api/tournaments/:id/matches/:mid — 撤销成绩 */
+async function handleUndoResult(request, env, params, tournament, cors) {
+  if (!tournament || tournament.id !== params.id) {
+    return json({ error: '无权限操作此比赛' }, 401, cors);
+  }
+  try {
+    // 验证 match 属于此比赛
+    const match = await env.DB.prepare(
+      'SELECT id, result FROM matches WHERE id = ? AND tournament_id = ?'
+    ).bind(params.mid, params.id).first();
+
+    if (!match) {
+      return json({ error: '对局不存在' }, 404, cors);
+    }
+
+    // 验证是否在30分钟内
+    const matchData = await env.DB.prepare(
+      'SELECT updated_at FROM matches WHERE id = ?'
+    ).bind(params.mid).first();
+
+    if (!matchData) {
+      return json({ error: '无法获取对局信息' }, 500, cors);
+    }
+
+    const updatedAt = new Date(matchData.updated_at);
+    const now = new Date();
+    const diffMs = now - updatedAt;
+    const diffMins = diffMs / (1000 * 60);
+
+    if (diffMins > 30) {
+      return json({ error: '只能撤销30分钟内的成绩' }, 400, cors);
+    }
+
+    // 恢复为 PENDING
+    await env.DB.prepare(
+      'UPDATE matches SET result = ?, updated_at = ? WHERE id = ?'
+    ).bind('PENDING', datetime('now'), params.mid).run();
+
+    return json({ success: true }, 200, cors);
+  } catch (err) {
+    return json({ error: '撤销成绩失败: ' + err.message }, 500, cors);
   }
 }
 
