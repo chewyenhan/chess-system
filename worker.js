@@ -646,7 +646,7 @@ async function handleDeleteTournament(request, env, params, tournament, cors) {
     // 软删除：设置 deleted_at，数据仍保留在数据库
     await env.DB.prepare(
       'UPDATE tournaments SET deleted_at = ? WHERE id = ?'
-    ).bind(datetime('now'), params.id).run();
+    ).bind(new Date().toISOString(), params.id).run();
     return json({ success: true }, 200, cors);
   } catch (err) {
     return json({ error: '删除比赛失败: ' + err.message }, 500, cors);
@@ -838,7 +838,7 @@ async function handleUndoResult(request, env, params, tournament, cors) {
     // 恢复为 PENDING
     await env.DB.prepare(
       'UPDATE matches SET result = ?, updated_at = ? WHERE id = ?'
-    ).bind('PENDING', datetime('now'), params.mid).run();
+    ).bind('PENDING', new Date().toISOString(), params.mid).run();
 
     return json({ success: true }, 200, cors);
   } catch (err) {
