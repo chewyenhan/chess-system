@@ -48,6 +48,11 @@
       </div>
       <div>
         <a href="index.html" class="outline" role="button" style="margin-right:0.5rem;">🏠 首页</a>
+        <button onclick="handleExport()" class="outline" role="button" style="margin-right:0.5rem;" title="导出比赛数据">📥 导出</button>
+        <label class="outline" role="button" style="margin-right:0.5rem; cursor:pointer;">
+          📤 导入
+          <input type="file" id="importFile" accept=".json" style="display:none;" onchange="handleImport(event)">
+        </label>
         <a id="matchLink" href="#" class="secondary" role="button">📱 学生看板</a>
       </div>
     </div>
@@ -415,6 +420,64 @@
         loadPlayerList();
       } catch (err) {
         alert('退赛失败: ' + err.message);
+      }
+    }
+
+    // ── 导出比赛数据 ──
+    async function handleExport() {
+      try {
+        const blob = await exportTournament(tournamentId);
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `chess_tournament_${tournamentId}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        alert('✅ 比赛数据已导出');
+      } catch (err) {
+        alert('导出失败: ' + err.message);
+      }
+    }
+
+    // ── 导入比赛数据 ──
+    async function handleImport(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const btn = event.target.closest('button') || event.target.closest('label');
+      btn.disabled = true;
+      btn.textContent = '导入中...';
+
+      try {
+        const text = await file.text();
+        const data = JSON.parse(text);
+
+        if (!data.players || !Array.isArray(data.players) || !data.matches || !Array.isArray(data.matches)) {
+          throw new Error('文件格式无效：缺少 players 或 matches 数组');
+        }
+
+        if (!confirm(`确定要导入比赛数据吗？\n\n- 选手数量: ${data.players.length}\n- 对局数量: ${data.matches.length}\n\n此操作将覆盖当前所有数据。`)) {
+          btn.disabled = false;
+          btn.textContent = '📤 导入';
+          return;
+        }
+
+        await importTournament(tournamentId, data);
+
+        // 刷新界面
+        tournament = await getTournament(tournamentId);
+        loadPlayerList();
+        loadPairings();
+
+        alert('✅ 比赛数据导入成功');
+      } catch (err) {
+        alert('导入失败: ' + err.message);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = '📤 导入';
+        event.target.value = ''; // 重置 file input
       }
     }
 

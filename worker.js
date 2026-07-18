@@ -212,6 +212,22 @@ export default {
         }
       }
 
+      // POST /api/tournaments/:id/export — 导出比赛数据
+      if (method === 'POST' && path.endsWith('/export')) {
+        const params = extractParams(path, 'api/tournaments/:id/export');
+        if (params) {
+          return handleExportTournament(request, env, params, tournament, cors);
+        }
+      }
+
+      // POST /api/tournaments/:id/import — 导入比赛数据
+      if (method === 'POST' && path.endsWith('/import')) {
+        const params = extractParams(path, 'api/tournaments/:id/import');
+        if (params) {
+          return handleImportTournament(request, env, params, tournament, cors);
+        }
+      }
+
       // PUT /api/tournaments/:id/advance — 进入下一轮
       if (method === 'PUT' && path.endsWith('/advance')) {
         const params = extractParams(path, 'api/tournaments/:id/advance');
@@ -650,6 +666,139 @@ async function handleRestoreTournament(request, env, params, tournament, cors) {
     return json({ success: true }, 200, cors);
   } catch (err) {
     return json({ error: '恢复比赛失败: ' + err.message }, 500, cors);
+  }
+}
+
+/** POST /api/tournaments/:id/export — 导出比赛数据（需 admin_token） */
+async function handleExportTournament(request, env, params, tournament, cors) {
+  if (!tournament || tournament.id !== params.id) {
+    return json({ error: '无权限操作此比赛' }, 401, cors);
+  }
+  try {
+    // 获取所有数据
+    const tournamentData = await env.DB.prepare(
+      'SELECT id, name, total_rounds, tie_breakers, current_round, status, admin_token, created_at FROM tournaments WHERE id = ?'
+    ).bind(params.id).first();
+
+    if (!tournamentData) {
+      return json({ error: '比赛不存在' }, 404, cors);
+    }
+
+    const players = await env.DB.prepare(
+      'SELECT id, name, grade, is_active FROM players WHERE tournament_id = ?'
+    ).bind(params.id).all();
+
+    const matches = await env.DB.prepare(
+      'SELECT id, white_player_id, black_player_id, round, board_number, result FROM matches WHERE tournament_id = ? ORDER BY round, board_number'
+    ).bind(params.id).all();
+
+    // 构建导出对象
+    const exportData = {
+      tournament: tournamentData,
+      players: players.results.map(p => ({
+        id: p.id,
+        name: p.name,
+        grade: p.grade,
+        is_active: p.is_active === 1
+      })),
+      matches: matches.results
+    };
+
+    // 转换为 JSON 字符串
+    const jsonStr = JSON.stringify(exportData, null, 2);
+
+    // 返回 JSON 文件
+    return new Response(jsonStr, {
+      status: 200,
+      headers: {
+        'Content-Type': 'application/json; charset=utf-8',
+        'Content-Disposition': `attachment; filename="tournament_${params.id}.json"`,
+      },
+    });
+
+  } catch (err) {
+    console.error('Export tournament error:', err);
+    return json({ error: '导出失败: ' + err.message }, 500, cors);
+  }
+}
+
+/** POST /api/tournaments/:id/import — 导入比赛数据（需 admin_token，覆盖所有数据） */
+async function handleImportTournament(request, env, params, tournament, cors) {
+  if (!tournament || tournament.id !== params.id) {
+    return json({ error: '无权限操作此比赛' }, 401, cors);
+  }
+  try {
+    const body = await request.json();
+    const { players, matches } = body;
+
+    if (!players || !Array.isArray(players)) {
+      return json({ error: '缺少 players 数组' }, 400, cors);
+    }
+
+    if (!matches || !Array.isArray(matches)) {
+      return json({ error: '缺少 matches 数组' }, 400, cors);
+    }
+
+    // 开始事务
+    const tx = env.DB.prepare('BEGIN TRANSACTION');
+
+    // 清空现有选手
+    await env.DB.prepare(
+      'DELETE FROM players WHERE tournament_id = ?'
+    ).bind(params.id).run();
+
+    // 清空现有对局
+    await env.DB.prepare(
+      'DELETE FROM matches WHERE tournament_id = ?'
+    ).bind(params.id).run();
+
+    // 批量插入选手
+    const playerStmt = env.DB.prepare(
+      'INSERT INTO players (id, tournament_id, name, grade, is_active) VALUES (?, ?, ?, ?, ?)'
+    );
+    const playerBatch = [];
+    for (const p of players) {
+      if (!p.name) continue;
+      playerBatch.push(playerStmt.bind(
+        crypto.randomUUID(),
+        params.id,
+        p.name.trim(),
+        (p.grade || '').trim(),
+        p.is_active ? 1 : 0
+      ));
+    }
+    await env.DB.batch(playerBatch);
+
+    // 批量插入对局
+    const matchStmt = env.DB.prepare(
+      'INSERT INTO matches (id, tournament_id, white_player_id, black_player_id, round, board_number, result) VALUES (?, ?, ?, ?, ?, ?, ?)'
+    );
+    const matchBatch = [];
+    for (const m of matches) {
+      matchBatch.push(matchStmt.bind(
+        crypto.randomUUID(),
+        params.id,
+        m.white_player_id,
+        m.black_player_id,
+        m.round,
+        m.board_number,
+        m.result || 'PENDING'
+      ));
+    }
+    await env.DB.batch(matchBatch);
+
+    // 提交事务
+    await tx.run();
+
+    return json({
+      success: true,
+      imported_players: playerBatch.length,
+      imported_matches: matchBatch.length,
+    }, 200, cors);
+
+  } catch (err) {
+    console.error('Import tournament error:', err);
+    return json({ error: '导入失败: ' + err.message }, 500, cors);
   }
 }
 

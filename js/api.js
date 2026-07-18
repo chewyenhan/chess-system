@@ -162,3 +162,21 @@ async function removePlayer(tournamentId, playerId) {
     method: 'DELETE',
   });
 }
+
+// ── 导出/导入功能 ──
+
+/** 导出比赛数据 */
+async function exportTournament(tournamentId) {
+  const res = await fetchWithAuth(tournamentId, '/api/tournaments/' + tournamentId + '/export', {
+    method: 'POST',
+  });
+  return res;
+}
+
+/** 导入比赛数据 */
+async function importTournament(tournamentId, data) {
+  return fetchWithAuth(tournamentId, '/api/tournaments/' + tournamentId + '/import', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
