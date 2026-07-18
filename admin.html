@@ -355,9 +355,15 @@
     async function handleResult(matchId, result) {
       try {
         await submitResult(tournamentId, matchId, result);
+        alert('✅ 成绩已录入');
         loadPairings();
       } catch (err) {
-        alert('录入失败: ' + err.message);
+        if (err.message.includes('管理权限已过期')) {
+          alert('❌ 录入失败\n\n管理权限已过期，请返回首页重新进入管理页面');
+        } else {
+          alert('录入失败: ' + err.message);
+        }
+        // 不调用 loadPairings()，避免清空对阵表
       }
     }
 
@@ -371,10 +377,11 @@
         loadPairings();
       } catch (err) {
         if (err.message.includes('管理权限已过期')) {
-          alert('❌ 撤销失败\n\n请返回首页重新进入管理页面');
+          alert('❌ 撤销失败\n\n管理权限已过期，请返回首页重新进入管理页面');
         } else {
           alert('撤销失败: ' + err.message);
         }
+        // 不调用 loadPairings()，避免清空对阵表
       }
     }
 
