@@ -261,19 +261,22 @@
       // 只有删除成功后才清除本地 token
       if (apiSuccess) {
         clearToken(tournamentId);
-      }
-
-      // 从本地列表移除
-      const list = getSavedTournaments().filter(t => t.id !== tournamentId);
-      localStorage.setItem('chess_tournaments', JSON.stringify(list));
-
-      // 重新加载（从 API 获取最新状态）
-      await loadSaved();
-
-      if (apiSuccess) {
+        const list = getSavedTournaments().filter(t => t.id !== tournamentId);
+        localStorage.setItem('chess_tournaments', JSON.stringify(list));
+        await loadSaved();
         alert('✅ 已删除「' + tournamentName + '」\n（本地记录已清除）');
       } else {
-        alert('⚠️ 服务器删除失败，本地记录已清除\n但数据可能仍存在于服务器');
+        // 删除失败：检查 token 是否存在
+        const currentToken = getToken(tournamentId);
+        if (!currentToken) {
+          // Token 丢失，从列表中删除这个比赛的记录
+          const list = getSavedTournaments().filter(t => t.id !== tournamentId);
+          localStorage.setItem('chess_tournaments', JSON.stringify(list));
+          await loadSaved();
+          alert('⚠️ 服务器删除失败\n\n本地记录已清除，但 Token 已丢失。\n请重新创建比赛或从服务器恢复。');
+        } else {
+          alert('⚠️ 服务器删除失败，请检查网络连接');
+        }
       }
     }
 

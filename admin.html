@@ -370,7 +370,11 @@
         alert('✅ 成绩已撤销');
         loadPairings();
       } catch (err) {
-        alert('撤销失败: ' + err.message);
+        if (err.message.includes('管理权限已过期')) {
+          alert('❌ 撤销失败\n\n请返回首页重新进入管理页面');
+        } else {
+          alert('撤销失败: ' + err.message);
+        }
       }
     }
 
