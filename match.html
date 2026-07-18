@@ -303,8 +303,8 @@
 
         // 动态表头：基础列 + 所有破同分列
         const tbHeaders = tbKeys.map(k => TB_LABELS[k] || k);
-        const colSpan = 5 + tbKeys.length;
-        thead.innerHTML = '<tr><th>#</th><th>姓名</th><th>年级</th><th>积分</th><th>对局</th>'
+        const colSpan = 8 + tbKeys.length;
+        thead.innerHTML = '<tr><th>#</th><th>姓名</th><th>年级</th><th>积分</th><th>胜</th><th>平</th><th>负</th><th>对局</th>'
           + tbHeaders.map(h => '<th>' + h + '</th>').join('') + '</tr>';
 
         if (standings.length === 0) {
@@ -323,6 +323,9 @@
             <td><strong>${escHtml(p.name)}</strong></td>
             <td>${escHtml(p.grade || '-')}</td>
             <td><strong>${p.score}</strong></td>
+            <td>${p.wins}</td>
+            <td>${p.draws}</td>
+            <td>${p.losses}</td>
             <td>${p.games_played}</td>
             ${tbValues}
           </tr>`;

@@ -132,7 +132,7 @@ function countWhiteGames(players, history) {
     count[p.id] = 0;
   }
   for (const m of history) {
-    if (m.white_player_id && m.result !== 'PENDING') {
+    if (m.white_player_id && m.result !== 'PENDING' && m.result !== 'BYE') {
       count[m.white_player_id] = (count[m.white_player_id] || 0) + 1;
     }
   }

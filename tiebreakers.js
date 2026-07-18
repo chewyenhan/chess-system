@@ -24,20 +24,26 @@ export function calculateStandings(players, history, tieBreakers) {
   const progressive = calcProgressive(players, history);
 
   // 构建排名对象
-  const standings = players.map(p => ({
-    id: p.id,
-    name: p.name,
-    grade: p.grade || '',
-    score: scores[p.id] || 0,
-    buchholz: buchholz[p.id] || 0,
-    median: medianBuchholz[p.id] || 0,
-    direct: direct[p.id]?.score || 0,
-    sonneborn: sonneborn[p.id] || 0,
-    progressive: progressive[p.id] || 0,
-    games_played: countGames(p.id, history),
-    white_games: countWhiteGames(p.id, history),
-    black_games: countBlackGames(p.id, history),
-  }));
+  const standings = players.map(p => {
+    const wdl = calcWinDrawLoss(p.id, history);
+    return {
+      id: p.id,
+      name: p.name,
+      grade: p.grade || '',
+      score: scores[p.id] || 0,
+      wins: wdl.wins,
+      draws: wdl.draws,
+      losses: wdl.losses,
+      buchholz: buchholz[p.id] || 0,
+      median: medianBuchholz[p.id] || 0,
+      direct: direct[p.id]?.score || 0,
+      sonneborn: sonneborn[p.id] || 0,
+      progressive: progressive[p.id] || 0,
+      games_played: countGames(p.id, history),
+      white_games: countWhiteGames(p.id, history),
+      black_games: countBlackGames(p.id, history),
+    };
+  });
 
   // 按积分 + 破同分规则排序
   standings.sort((a, b) => {
@@ -154,16 +160,24 @@ function calcMedianBuchholz(players, history, scores) {
   return median;
 }
 
-// ── Direct Encounter（直胜分） ──
+// ── Direct Encounter（直胜分：只计算同分选手之间的对局结果） ──
 function calcDirectEncounter(players, history, scores) {
   const direct = {};
   for (const p of players) direct[p.id] = { score: 0 };
 
+  // 直胜破同分规则：仅在积分相同的选手之间比较相互对局结果
+  // 例如：两人同积3分，看他们之间的对局谁赢了
   for (const m of history) {
     if (m.result === 'PENDING') continue;
     const wid = m.white_player_id;
     const bid = m.black_player_id;
-    if (!wid || !bid) continue;
+    if (!wid || !bid) continue; // BYE（轮空）没有对手，不参与直胜计算
+
+    const wScore = scores[wid];
+    const bScore = scores[bid];
+    // 只有积分相同的对手之间的对局才计入直胜分
+    if (wScore === undefined || bScore === undefined) continue;
+    if (wScore !== bScore) continue;
 
     if (m.result === 'WHITE_WIN') {
       direct[wid].score = (direct[wid].score || 0) + 1;
@@ -239,6 +253,29 @@ function calcProgressive(players, history) {
   return prog;
 }
 
+// ── 胜/平/负统计 ──
+function calcWinDrawLoss(playerId, history) {
+  let wins = 0, draws = 0, losses = 0;
+  for (const m of history) {
+    if (m.result === 'PENDING') continue;
+    // BYE（轮空）算作胜局
+    if (m.result === 'BYE') {
+      if (m.white_player_id === playerId) wins++;
+      continue;
+    }
+    if (m.white_player_id === playerId) {
+      if (m.result === 'WHITE_WIN') wins++;
+      else if (m.result === 'DRAW') draws++;
+      else if (m.result === 'BLACK_WIN') losses++;
+    } else if (m.black_player_id === playerId) {
+      if (m.result === 'BLACK_WIN') wins++;
+      else if (m.result === 'DRAW') draws++;
+      else if (m.result === 'WHITE_WIN') losses++;
+    }
+  }
+  return { wins, draws, losses };
+}
+
 // ── 辅助统计 ──
 function countGames(playerId, history) {
   return history.filter(m =>
@@ -249,7 +286,7 @@ function countGames(playerId, history) {
 
 function countWhiteGames(playerId, history) {
   return history.filter(m =>
-    m.result !== 'PENDING' && m.white_player_id === playerId
+    m.result !== 'PENDING' && m.result !== 'BYE' && m.white_player_id === playerId
   ).length;
 }
 
