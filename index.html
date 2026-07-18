@@ -251,16 +251,18 @@
       try {
         await deleteTournament(tournamentId);
       } catch (err) {
-        // 如果 API 失败（404 等），仍然从本地列表移除
         console.warn('API 删除失败（可能已不存在）:', err.message);
       }
 
-      // 从本地列表移除
+      // 从本地列表移除（无论 API 成功失败）
       clearToken(tournamentId);
       const list = getSavedTournaments().filter(t => t.id !== tournamentId);
       localStorage.setItem('chess_tournaments', JSON.stringify(list));
-      renderSaved();
-      alert('✅ 已删除「' + tournamentName + '」');
+
+      // 重新加载（从 API 获取最新状态）
+      await loadSaved();
+
+      alert('✅ 已删除「' + tournamentName + '」\n（本地记录已清除）');
     }
 
     // ── 恢复已删除的比赛 ──
@@ -269,8 +271,8 @@
 
       try {
         await restoreTournament(tournamentId);
+        await loadSaved(); // 重新加载列表
         alert('✅ 已恢复「' + tournamentName + '」');
-        loadSaved(); // 重新加载列表
       } catch (err) {
         alert('恢复失败: ' + err.message);
       }
