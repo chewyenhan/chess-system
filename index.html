@@ -39,6 +39,20 @@
     .badge { font-size: 0.75rem; padding: 0.15rem 0.5rem; border-radius: 1rem; background: var(--pico-primary-background); color: white; }
     textarea { font-family: monospace; font-size: 0.9rem; }
     .site-footer { text-align: center; padding: 1rem; font-size: 0.8rem; color: var(--pico-muted-color); }
+    /* 破同分规则按钮 */
+    fieldset legend {
+      display: none; /* 隐藏 legend 文本 */
+    }
+    fieldset label {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin-bottom: 0.3rem;
+      cursor: pointer;
+    }
+    fieldset label input[type="checkbox"] {
+      margin: 0;
+    }
   </style>
 </head>
 <body>
@@ -68,11 +82,41 @@
           <small style="color:var(--pico-muted-color);">可留空，稍后在管理页导入。已有人数：<strong id="playerCountPreview">0</strong></small>
           <label style="margin-top:1rem;">🏅 破同分规则（按优先级排序）</label>
           <fieldset style="margin-bottom:0;">
-            <label><input type="checkbox" id="tbBuchholz" checked> ① 对手分 (Buchholz) — 所有对手的积分之和</label>
-            <label><input type="checkbox" id="tbMedian" checked> ② 中间对手分 (Median Buchholz) — 去掉最高最低对手分</label>
-            <label><input type="checkbox" id="tbDirect"> ③ 直胜 (Direct Encounter) — 相互对局结果</label>
-            <label><input type="checkbox" id="tbSonneborn"> ④ 索尼伯恩 (Sonneborn-Berger) — 击败对手的积分加权</label>
-            <label><input type="checkbox" id="tbProgressive"> ⑤ 累进分 (Progressive) — 每轮结束时的积分累加</label>
+            <label>
+              <input type="checkbox" id="tbBuchholz" checked>
+              <span style="font-weight:bold; margin-left:0.3rem;">①</span>
+              对手分 (Buchholz) — 所有对手的积分之和
+              <button type="button" onclick="moveTieBreaker('tbBuchholz', -1)" class="outline secondary" style="font-size:0.7rem; padding:0.1rem 0.4rem;">↑</button>
+              <button type="button" onclick="moveTieBreaker('tbBuchholz', 1)" class="outline secondary" style="font-size:0.7rem; padding:0.1rem 0.4rem;">↓</button>
+            </label>
+            <label>
+              <input type="checkbox" id="tbMedian" checked>
+              <span style="font-weight:bold; margin-left:0.3rem;">②</span>
+              中间对手分 (Median Buchholz) — 去掉最高最低对手分
+              <button type="button" onclick="moveTieBreaker('tbMedian', -1)" class="outline secondary" style="font-size:0.7rem; padding:0.1rem 0.4rem;">↑</button>
+              <button type="button" onclick="moveTieBreaker('tbMedian', 1)" class="outline secondary" style="font-size:0.7rem; padding:0.1rem 0.4rem;">↓</button>
+            </label>
+            <label>
+              <input type="checkbox" id="tbDirect">
+              <span style="font-weight:bold; margin-left:0.3rem;">③</span>
+              直胜 (Direct Encounter) — 相互对局结果
+              <button type="button" onclick="moveTieBreaker('tbDirect', -1)" class="outline secondary" style="font-size:0.7rem; padding:0.1rem 0.4rem;">↑</button>
+              <button type="button" onclick="moveTieBreaker('tbDirect', 1)" class="outline secondary" style="font-size:0.7rem; padding:0.1rem 0.4rem;">↓</button>
+            </label>
+            <label>
+              <input type="checkbox" id="tbSonneborn">
+              <span style="font-weight:bold; margin-left:0.3rem;">④</span>
+              索尼伯恩 (Sonneborn-Berger) — 击败对手的积分加权
+              <button type="button" onclick="moveTieBreaker('tbSonneborn', -1)" class="outline secondary" style="font-size:0.7rem; padding:0.1rem 0.4rem;">↑</button>
+              <button type="button" onclick="moveTieBreaker('tbSonneborn', 1)" class="outline secondary" style="font-size:0.7rem; padding:0.1rem 0.4rem;">↓</button>
+            </label>
+            <label>
+              <input type="checkbox" id="tbProgressive">
+              <span style="font-weight:bold; margin-left:0.3rem;">⑤</span>
+              累进分 (Progressive) — 每轮结束时的积分累加
+              <button type="button" onclick="moveTieBreaker('tbProgressive', -1)" class="outline secondary" style="font-size:0.7rem; padding:0.1rem 0.4rem;">↑</button>
+              <button type="button" onclick="moveTieBreaker('tbProgressive', 1)" class="outline secondary" style="font-size:0.7rem; padding:0.1rem 0.4rem;">↓</button>
+            </label>
           </fieldset>
           <div id="createError" style="color:#dc2626; font-size:0.9rem; margin-top:0.5rem; display:none;"></div>
           <button type="submit" id="createBtn" style="width:100%; margin-top:1rem;">创建比赛</button>
@@ -153,6 +197,45 @@
       alert('✅ 已删除「' + tournamentName + '」');
     }
 
+    // ── 破同分规则排序（上下箭头） ──
+    const TIEBREAKER_IDS = ['tbBuchholz', 'tbMedian', 'tbDirect', 'tbSonneborn', 'tbProgressive'];
+
+    /**
+     * 移动破同分规则顺序
+     * @param {string} checkboxId - checkbox 的 ID
+     * @param {number} direction - -1 上移, 1 下移
+     */
+    function moveTieBreaker(checkboxId, direction) {
+      const idx = TIEBREAKER_IDS.indexOf(checkboxId);
+      if (idx === -1) return;
+
+      const newIdx = idx + direction;
+      // 边界检查：不超出数组边界
+      if (newIdx < 0 || newIdx >= TIEBREAKER_IDS.length) return;
+
+      // 交换位置
+      [TIEBREAKER_IDS[idx], TIEBREAKER_IDS[newIdx]] = [TIEBREAKER_IDS[newIdx], TIEBREAKER_IDS[idx]];
+
+      // 更新 DOM 序号显示
+      updateTiebreakerNumbers();
+    }
+
+    /**
+     * 更新破同分规则的序号显示
+     */
+    function updateTiebreakerNumbers() {
+      TIEBREAKER_IDS.forEach((id, index) => {
+        const checkbox = document.getElementById(id);
+        const numberSpan = checkbox.nextElementSibling; // 假设序号是 checkbox 的下一个 sibling
+        if (numberSpan && numberSpan.tagName === 'SPAN') {
+          numberSpan.textContent = (index + 1) + ' ';
+        }
+      });
+    }
+
+    // 页面加载时初始化序号
+    updateTiebreakerNumbers();
+
     // ── 创建比赛 ──
     async function handleCreate(e) {
       e.preventDefault();
@@ -160,13 +243,17 @@
       const rounds = parseInt(document.getElementById('tRounds').value);
       const playerRaw = document.getElementById('playerInput').value.trim();
 
-      // 收集破同分规则
-      const tieBreakers = [];
-      if (document.getElementById('tbBuchholz').checked) tieBreakers.push('buchholz');
-      if (document.getElementById('tbMedian').checked) tieBreakers.push('median');
-      if (document.getElementById('tbDirect').checked) tieBreakers.push('direct');
-      if (document.getElementById('tbSonneborn').checked) tieBreakers.push('sonneborn');
-      if (document.getElementById('tbProgressive').checked) tieBreakers.push('progressive');
+      // 收集破同分规则（按当前 TIEBREAKER_IDS 顺序）
+      const tieBreakers = TIEBREAKER_IDS
+        .filter(id => document.getElementById(id).checked)
+        .map(id => {
+          if (id === 'tbBuchholz') return 'buchholz';
+          if (id === 'tbMedian') return 'median';
+          if (id === 'tbDirect') return 'direct';
+          if (id === 'tbSonneborn') return 'sonneborn';
+          if (id === 'tbProgressive') return 'progressive';
+        })
+        .filter(Boolean); // 移除 undefined（未勾选的规则）
 
       const btn = document.getElementById('createBtn');
       const errEl = document.getElementById('createError');
