@@ -165,12 +165,27 @@ async function removePlayer(tournamentId, playerId) {
 
 // ── 导出/导入功能 ──
 
-/** 导出比赛数据 */
+/** 导出比赛数据（绕过 fetchWithAuth 的 .json() 解析，直接返回 Blob） */
 async function exportTournament(tournamentId) {
-  const res = await fetchWithAuth(tournamentId, '/api/tournaments/' + tournamentId + '/export', {
+  const token = getToken(tournamentId);
+  const headers = {};
+  if (token) headers['Authorization'] = 'Bearer ' + token;
+
+  const res = await fetch(API_BASE + '/api/tournaments/' + tournamentId + '/export', {
     method: 'POST',
+    headers,
   });
-  return res;
+
+  if (res.status === 401) {
+    clearToken(tournamentId);
+    throw new Error('管理权限已过期，请重新进入管理页面');
+  }
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || ('HTTP ' + res.status));
+  }
+
+  return await res.blob();
 }
 
 /** 导入比赛数据 */

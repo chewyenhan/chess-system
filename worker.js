@@ -713,6 +713,7 @@ async function handleExportTournament(request, env, params, tournament, cors) {
       headers: {
         'Content-Type': 'application/json; charset=utf-8',
         'Content-Disposition': `attachment; filename="tournament_${params.id}.json"`,
+        ...cors,
       },
     });
 
