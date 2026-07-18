@@ -662,7 +662,7 @@ async function handleRestoreTournament(request, env, params, tournament, cors) {
     // 恢复比赛：设置 deleted_at 为 NULL
     await env.DB.prepare(
       'UPDATE tournaments SET deleted_at = ? WHERE id = ?'
-    ).bind(NULL, params.id).run();
+    ).bind(null, params.id).run();
     return json({ success: true }, 200, cors);
   } catch (err) {
     return json({ error: '恢复比赛失败: ' + err.message }, 500, cors);

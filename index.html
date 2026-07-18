@@ -185,6 +185,14 @@
           return;
         }
 
+        // 将 API 返回的 admin_token 同步到 localStorage
+        // 这样即使比赛不在 chess_tournaments 中，删除操作也能找到 token
+        list.forEach(t => {
+          if (t.admin_token && !getToken(t.id)) {
+            setToken(t.id, t.admin_token);
+          }
+        });
+
         container.innerHTML = list.map(t => {
           const statusLabel = t.status ? STATUS_LABELS[t.status] : '-';
           const isDeleted = t.deleted_at !== undefined && t.deleted_at !== null;
