@@ -145,16 +145,13 @@ function calcMedianBuchholz(players, history, scores) {
     }
   }
 
-  // 去掉最高和最低分后求和（如果对手数 ≤ 2 则保留全部）
+  // 去掉最高和最低分后求和（中间对手分）
+  // arr.length ≤ 2 时 slice(1,-1) 返回空数组 → median=0（头尾相抵）
   for (const p of players) {
     const arr = opponentScores[p.id] || [];
-    if (arr.length <= 2) {
-      median[p.id] = arr.reduce((a, b) => a + b, 0);
-    } else {
-      const sorted = [...arr].sort((a, b) => a - b);
-      // 去掉最低和最高各1个
-      median[p.id] = sorted.slice(1, -1).reduce((a, b) => a + b, 0);
-    }
+    const sorted = [...arr].sort((a, b) => a - b);
+    // 去掉最低和最高各1个
+    median[p.id] = sorted.slice(1, -1).reduce((a, b) => a + b, 0);
   }
 
   return median;
